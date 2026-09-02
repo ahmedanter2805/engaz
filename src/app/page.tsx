@@ -55,7 +55,7 @@ export default function Home() {
     e.preventDefault();
     try {
       let price = 500;
-      if (meetingType === 'زيارة المكتب') price = 1000;
+      if (meetingType === 'حضور لمقر المكتب') price = 1000;
       if (consultationType === 'تجاري') price += 500;
 
       const { data, error } = await supabase.from('consultations').insert([
@@ -78,9 +78,9 @@ export default function Home() {
       setClientPhone('');
       setBookingDate('');
       setBookingTime('');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Booking error:', error);
-      alert('حدث خطأ أثناء الحجز. يرجى المحاولة مرة أخرى.');
+      alert('حدث خطأ أثناء الحجز: ' + (error.message || 'يرجى المحاولة مرة أخرى والتأكد من إعدادات قاعدة البيانات.'));
     }
   };
 
@@ -128,6 +128,9 @@ export default function Home() {
     hidden: { opacity: 0, y: 30 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
   };
+
+  // Get today's date in YYYY-MM-DD format for the min date attribute
+  const today = new Date().toISOString().split('T')[0];
 
   return (
     <div className="flex flex-col min-h-screen bg-charcoal-950 text-slate-200">
@@ -273,7 +276,19 @@ export default function Home() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wide">رقم الهاتف</label>
-                  <input required type="tel" value={clientPhone} onChange={e => setClientPhone(e.target.value)} className="w-full bg-charcoal-950 border border-slate-800 rounded p-3 text-white focus:outline-none focus:border-gold-500 transition-colors" placeholder="رقم الموبايل للتواصل" />
+                  <input 
+                    required 
+                    type="text" 
+                    pattern="[0-9]*"
+                    inputMode="numeric"
+                    value={clientPhone} 
+                    onInput={(e) => {
+                      const numericValue = e.currentTarget.value.replace(/[^0-9]/g, '');
+                      setClientPhone(numericValue);
+                    }} 
+                    className="w-full bg-charcoal-950 border border-slate-800 rounded p-3 text-white focus:outline-none focus:border-gold-500 transition-colors" 
+                    placeholder="رقم الموبايل للتواصل (أرقام فقط)" 
+                  />
                 </div>
                 
                 <div>
@@ -308,7 +323,7 @@ export default function Home() {
                 <div className="grid grid-cols-2 gap-4 md:col-span-2">
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wide">تاريخ الاستشارة</label>
-                    <input required type="date" value={bookingDate} onChange={e => setBookingDate(e.target.value)} className="w-full bg-charcoal-950 border border-slate-800 rounded p-3 text-white focus:outline-none focus:border-gold-500 transition-colors" />
+                    <input required type="date" min={today} value={bookingDate} onChange={e => setBookingDate(e.target.value)} className="w-full bg-charcoal-950 border border-slate-800 rounded p-3 text-white focus:outline-none focus:border-gold-500 transition-colors" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wide">الوقت المفضل</label>
