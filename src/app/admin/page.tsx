@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Plus, Trash2, Edit, Users, Briefcase, FileText, Loader2, Calendar, LayoutDashboard, FolderOpen, LogOut, CheckCircle, Upload, X } from 'lucide-react';
+import { Plus, Trash2, Edit, Users, Briefcase, FileText, Loader2, Calendar, LayoutDashboard, FolderOpen, LogOut, CheckCircle, Upload, X, Settings, DollarSign } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminDashboard() {
@@ -14,6 +14,18 @@ export default function AdminDashboard() {
   const [resources, setResources] = useState<any[]>([]);
   const [cases, setCases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Pricing States
+  const [prices, setPrices] = useState({
+    video_default: 500,
+    video_commercial: 1000,
+    phone_default: 500,
+    phone_commercial: 1000,
+    office_default: 1000,
+    office_commercial: 1500,
+  });
+  const [priceSaving, setPriceSaving] = useState(false);
+  const [priceSaved, setPriceSaved] = useState(false);
 
   // Form States
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -144,6 +156,7 @@ export default function AdminDashboard() {
           { id: 'lawyers', icon: <Users size={20}/>, label: 'المحامين' },
           { id: 'cases', icon: <FolderOpen size={20}/>, label: 'القضايا' },
           { id: 'resources', icon: <FileText size={20}/>, label: 'العقود والمقالات' },
+          { id: 'pricing', icon: <DollarSign size={20}/>, label: 'أسعار الاستشارات' },
         ].map(item => (
           <button
             key={item.id}
@@ -368,6 +381,94 @@ export default function AdminDashboard() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* TAB: PRICING */}
+          {activeTab === 'pricing' && (
+            <motion.div key="pricing" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <h1 className="text-3xl font-bold mb-8">إدارة أسعار الاستشارات</h1>
+              <p className="text-slate-400 mb-8">حدد سعر الاستشارة حسب نوع اللقاء والتخصص القانوني. هذه الأسعار ستظهر تلقائياً للعملاء في نموذج الحجز.</p>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Video Call Prices */}
+                <div className="bg-charcoal-900 border border-charcoal-800 rounded-2xl p-6">
+                  <div className="flex items-center gap-3 mb-6 pb-4 border-b border-charcoal-800">
+                    <div className="bg-blue-500/10 p-2 rounded-lg"><Calendar className="text-blue-400 h-5 w-5" /></div>
+                    <h3 className="text-lg font-bold text-white">فيديو كول / مكالمة</h3>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1 uppercase tracking-wide">استشارة عادية (ج.م)</label>
+                      <input type="number" value={prices.video_default} onChange={e => setPrices({...prices, video_default: Number(e.target.value)})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg text-white text-2xl font-bold text-center focus:outline-none focus:border-gold-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1 uppercase tracking-wide">استشارة تجارية (ج.م)</label>
+                      <input type="number" value={prices.video_commercial} onChange={e => setPrices({...prices, video_commercial: Number(e.target.value)})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg text-white text-2xl font-bold text-center focus:outline-none focus:border-gold-500" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Phone Call Prices */}
+                <div className="bg-charcoal-900 border border-charcoal-800 rounded-2xl p-6">
+                  <div className="flex items-center gap-3 mb-6 pb-4 border-b border-charcoal-800">
+                    <div className="bg-emerald-500/10 p-2 rounded-lg"><Briefcase className="text-emerald-400 h-5 w-5" /></div>
+                    <h3 className="text-lg font-bold text-white">مكالمة هاتفية</h3>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1 uppercase tracking-wide">استشارة عادية (ج.م)</label>
+                      <input type="number" value={prices.phone_default} onChange={e => setPrices({...prices, phone_default: Number(e.target.value)})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg text-white text-2xl font-bold text-center focus:outline-none focus:border-gold-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1 uppercase tracking-wide">استشارة تجارية (ج.م)</label>
+                      <input type="number" value={prices.phone_commercial} onChange={e => setPrices({...prices, phone_commercial: Number(e.target.value)})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg text-white text-2xl font-bold text-center focus:outline-none focus:border-gold-500" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Office Visit Prices */}
+                <div className="bg-charcoal-900 border border-charcoal-800 rounded-2xl p-6">
+                  <div className="flex items-center gap-3 mb-6 pb-4 border-b border-charcoal-800">
+                    <div className="bg-gold-500/10 p-2 rounded-lg"><DollarSign className="text-gold-500 h-5 w-5" /></div>
+                    <h3 className="text-lg font-bold text-white">حضور لمقر المكتب</h3>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1 uppercase tracking-wide">استشارة عادية (ج.م)</label>
+                      <input type="number" value={prices.office_default} onChange={e => setPrices({...prices, office_default: Number(e.target.value)})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg text-white text-2xl font-bold text-center focus:outline-none focus:border-gold-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1 uppercase tracking-wide">استشارة تجارية (ج.م)</label>
+                      <input type="number" value={prices.office_commercial} onChange={e => setPrices({...prices, office_commercial: Number(e.target.value)})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg text-white text-2xl font-bold text-center focus:outline-none focus:border-gold-500" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8 flex items-center gap-4">
+                <button 
+                  onClick={async () => {
+                    setPriceSaving(true);
+                    // Save prices to Supabase settings table
+                    const { error } = await supabase.from('settings').upsert({ id: 'consultation_prices', value: prices }, { onConflict: 'id' });
+                    if (error) {
+                      console.error(error);
+                      // Fallback: save to localStorage
+                      localStorage.setItem('consultation_prices', JSON.stringify(prices));
+                    }
+                    setPriceSaving(false);
+                    setPriceSaved(true);
+                    setTimeout(() => setPriceSaved(false), 3000);
+                  }}
+                  disabled={priceSaving}
+                  className="bg-gradient-to-r from-gold-600 to-gold-400 hover:from-gold-500 hover:to-gold-300 text-charcoal-950 px-8 py-3 rounded-lg font-bold transition shadow-[0_0_15px_rgba(212,175,55,0.2)] flex items-center gap-2"
+                >
+                  {priceSaving ? <Loader2 className="animate-spin h-5 w-5" /> : <CheckCircle className="h-5 w-5" />}
+                  حفظ الأسعار
+                </button>
+                {priceSaved && <span className="text-emerald-400 font-medium">✓ تم حفظ الأسعار بنجاح!</span>}
               </div>
             </motion.div>
           )}
