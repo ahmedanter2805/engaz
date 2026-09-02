@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Plus, Trash2, Edit, Users, Briefcase, FileText, Loader2, Calendar, LayoutDashboard, FolderOpen, LogOut, CheckCircle, Upload, X, Settings, DollarSign, Globe, PhoneCall, ShieldCheck } from 'lucide-react';
+import { Plus, Trash2, Edit, Users, Briefcase, FileText, Loader2, Calendar, LayoutDashboard, FolderOpen, LogOut, CheckCircle, Upload, X, Settings, DollarSign, Globe, PhoneCall, ShieldCheck, UserCheck, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminDashboard() {
@@ -53,29 +53,38 @@ export default function AdminDashboard() {
 
   const [settingsSaving, setSettingsSaving] = useState(false);
 
+  const [clients, setClients] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<any[]>([]);
+
   // Form States
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lawyerForm, setLawyerForm] = useState({ name: '', title: '', experience_years: '', bio: '', image_url: '' });
   const [lawyerImage, setLawyerImage] = useState<File | null>(null);
   const [lawyerImagePreview, setLawyerImagePreview] = useState('');
   const [resourceForm, setResourceForm] = useState({ title: '', type: 'template', content: '' });
-  const [caseForm, setCaseForm] = useState({ case_number: '', client_name: '', title: '', status: 'شغالة' });
+  const [caseForm, setCaseForm] = useState({ case_number: '', client_name: '', title: '', status: 'شغالة', client_id: '' });
+  const [clientForm, setClientForm] = useState({ name: '', national_id: '', phone: '', email: '', address: '' });
+  const [sessionForm, setSessionForm] = useState({ case_id: '', session_date: '', requirements: '', roll_number: '', court_name: '' });
   const [uploadFile, setUploadFile] = useState<File | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
-    const [lawyersRes, consRes, resRes, casesRes, settingsRes] = await Promise.all([
+    const [lawyersRes, consRes, resRes, casesRes, settingsRes, clientsRes, sessionsRes] = await Promise.all([
       supabase.from('lawyers').select('*').order('created_at', { ascending: false }),
       supabase.from('consultations').select('*').order('created_at', { ascending: false }),
       supabase.from('resources').select('*').order('created_at', { ascending: false }),
       supabase.from('cases').select('*').order('created_at', { ascending: false }),
-      supabase.from('settings').select('*')
+      supabase.from('settings').select('*'),
+      supabase.from('clients').select('*').order('created_at', { ascending: false }),
+      supabase.from('sessions').select(`*, cases (case_number, title)`).order('session_date', { ascending: true })
     ]);
 
     if (lawyersRes.data) setLawyers(lawyersRes.data);
     if (consRes.data) setConsultations(consRes.data);
     if (resRes.data) setResources(resRes.data);
     if (casesRes.data) setCases(casesRes.data);
+    if (clientsRes.data) setClients(clientsRes.data);
+    if (sessionsRes.data) setSessions(sessionsRes.data);
     
     // Load Settings
     if (settingsRes.data && settingsRes.data.length > 0) {
@@ -182,15 +191,44 @@ export default function AdminDashboard() {
     }
 
     const { error } = await supabase.from('cases').insert([
-      { ...caseForm, file_url: fileUrl }
+      { 
+        case_number: caseForm.case_number, 
+        client_name: caseForm.client_name, 
+        title: caseForm.title, 
+        status: caseForm.status, 
+        client_id: caseForm.client_id || null,
+        file_url: fileUrl 
+      }
     ]);
     
     if (!error) { 
-      setCaseForm({ case_number: '', client_name: '', title: '', status: 'شغالة' }); 
+      setCaseForm({ case_number: '', client_name: '', title: '', status: 'شغالة', client_id: '' }); 
       setUploadFile(null);
       fetchData(); 
     }
     else alert('خطأ: ' + error.message);
+    setIsSubmitting(false);
+  };
+
+  const handleAddClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const { error } = await supabase.from('clients').insert([clientForm]);
+    if (!error) { 
+      setClientForm({ name: '', national_id: '', phone: '', email: '', address: '' }); 
+      fetchData(); 
+    } else alert('خطأ: ' + error.message);
+    setIsSubmitting(false);
+  };
+
+  const handleAddSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const { error } = await supabase.from('sessions').insert([{ ...sessionForm, status: 'pending' }]);
+    if (!error) { 
+      setSessionForm({ case_id: '', session_date: '', requirements: '', roll_number: '', court_name: '' }); 
+      fetchData(); 
+    } else alert('خطأ: ' + error.message);
     setIsSubmitting(false);
   };
 
@@ -221,9 +259,11 @@ export default function AdminDashboard() {
           { id: 'dashboard', icon: <LayoutDashboard size={20}/>, label: 'الرئيسية' },
           { id: 'content', icon: <Globe size={20}/>, label: 'محتوى الموقع' },
           { id: 'contact', icon: <PhoneCall size={20}/>, label: 'بيانات التواصل' },
+          { id: 'clients', icon: <UserCheck size={20}/>, label: 'إدارة الموكلين' },
           { id: 'consultations', icon: <Calendar size={20}/>, label: 'الاستشارات' },
           { id: 'lawyers', icon: <Users size={20}/>, label: 'المحامين' },
           { id: 'cases', icon: <FolderOpen size={20}/>, label: 'القضايا' },
+          { id: 'sessions', icon: <Clock size={20}/>, label: 'أجندة الجلسات' },
           { id: 'resources', icon: <FileText size={20}/>, label: 'العقود والمقالات' },
           { id: 'pricing', icon: <DollarSign size={20}/>, label: 'أسعار الاستشارات' },
         ].map(item => (
@@ -379,6 +419,50 @@ export default function AdminDashboard() {
             </motion.div>
           )}
 
+          {/* TAB: CLIENTS */}
+          {activeTab === 'clients' && (
+            <motion.div key="clients" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <h1 className="text-3xl font-bold mb-8">إدارة الموكلين</h1>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="bg-charcoal-900 border border-charcoal-800 p-6 rounded-2xl h-fit">
+                  <h2 className="text-xl font-bold mb-4">إضافة موكل جديد</h2>
+                  <form onSubmit={handleAddClient} className="space-y-4">
+                    <input required type="text" placeholder="الاسم الكامل" value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
+                    <input required type="text" placeholder="الرقم القومي" value={clientForm.national_id} onChange={e => setClientForm({...clientForm, national_id: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
+                    <input required type="text" placeholder="رقم الهاتف" value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
+                    <input type="email" placeholder="البريد الإلكتروني (اختياري)" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
+                    <textarea placeholder="العنوان التفصيلي" rows={2} value={clientForm.address} onChange={e => setClientForm({...clientForm, address: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none resize-none" />
+                    <button type="submit" disabled={isSubmitting} className="w-full bg-gradient-to-r from-gold-600 to-gold-400 hover:from-gold-500 hover:to-gold-300 text-charcoal-950 p-3 rounded-lg font-bold flex justify-center">{isSubmitting ? <Loader2 className="animate-spin" /> : 'حفظ الموكل'}</button>
+                  </form>
+                </div>
+                <div className="lg:col-span-2 overflow-x-auto">
+                  <table className="w-full text-right bg-charcoal-900 border border-charcoal-800 rounded-2xl">
+                    <thead className="text-slate-400 border-b border-charcoal-800">
+                      <tr>
+                        <th className="p-4">الاسم</th>
+                        <th className="p-4">الهاتف</th>
+                        <th className="p-4">الرقم القومي</th>
+                        <th className="p-4">حذف</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {clients.map(c => (
+                        <tr key={c.id}>
+                          <td className="p-4 font-bold">{c.name}</td>
+                          <td className="p-4">{c.phone}</td>
+                          <td className="p-4 font-mono text-slate-400">{c.national_id}</td>
+                          <td className="p-4">
+                            <button onClick={() => deleteRecord('clients', c.id)} className="text-red-500 p-2"><Trash2 size={18}/></button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {/* TAB: CONSULTATIONS */}
           {activeTab === 'consultations' && (
             <motion.div key="cons" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -512,7 +596,17 @@ export default function AdminDashboard() {
                   <h2 className="text-xl font-bold mb-4">فتح ملف قضية</h2>
                   <form onSubmit={handleAddCase} className="space-y-4">
                     <input required type="text" placeholder="رقم القضية (فريد)" value={caseForm.case_number} onChange={e => setCaseForm({...caseForm, case_number: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
-                    <input required type="text" placeholder="اسم العميل" value={caseForm.client_name} onChange={e => setCaseForm({...caseForm, client_name: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
+                    
+                    <div className="flex gap-2">
+                      <select required value={caseForm.client_id} onChange={e => {
+                        const client = clients.find(c => c.id === e.target.value);
+                        setCaseForm({...caseForm, client_id: e.target.value, client_name: client ? client.name : ''});
+                      }} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none">
+                        <option value="">اختر الموكل...</option>
+                        {clients.map(c => <option key={c.id} value={c.id}>{c.name} ({c.national_id})</option>)}
+                      </select>
+                    </div>
+
                     <input required type="text" placeholder="عنوان / موضوع القضية" value={caseForm.title} onChange={e => setCaseForm({...caseForm, title: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
                     <select value={caseForm.status} onChange={e => setCaseForm({...caseForm, status: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none">
                       <option>شغالة</option>
@@ -547,6 +641,70 @@ export default function AdminDashboard() {
                           </td>
                           <td className="p-4">
                             <button onClick={() => deleteRecord('cases', c.id)} className="text-red-500 p-2"><Trash2 size={18}/></button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+          {/* TAB: SESSIONS */}
+          {activeTab === 'sessions' && (
+            <motion.div key="sessions" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <h1 className="text-3xl font-bold mb-8">أجندة الجلسات</h1>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="bg-charcoal-900 border border-charcoal-800 p-6 rounded-2xl h-fit">
+                  <h2 className="text-xl font-bold mb-4">إضافة جلسة جديدة</h2>
+                  <form onSubmit={handleAddSession} className="space-y-4">
+                    <select required value={sessionForm.case_id} onChange={e => setSessionForm({...sessionForm, case_id: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none">
+                      <option value="">اختر القضية...</option>
+                      {cases.map(c => <option key={c.id} value={c.id}>{c.case_number} - {c.title}</option>)}
+                    </select>
+                    <input required type="date" value={sessionForm.session_date} onChange={e => setSessionForm({...sessionForm, session_date: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none text-white color-scheme-dark" style={{ colorScheme: 'dark' }} />
+                    <input type="text" placeholder="اسم المحكمة / الدائرة" value={sessionForm.court_name} onChange={e => setSessionForm({...sessionForm, court_name: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
+                    <input type="text" placeholder="رقم الرول" value={sessionForm.roll_number} onChange={e => setSessionForm({...sessionForm, roll_number: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none font-mono text-left" dir="ltr" />
+                    <textarea placeholder="المطلوب في الجلسة (مذكرات، حضور الخصم، إلخ)" rows={3} value={sessionForm.requirements} onChange={e => setSessionForm({...sessionForm, requirements: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none resize-none" />
+                    <button type="submit" disabled={isSubmitting} className="w-full bg-gradient-to-r from-gold-600 to-gold-400 hover:from-gold-500 hover:to-gold-300 text-charcoal-950 p-3 rounded-lg font-bold flex justify-center">{isSubmitting ? <Loader2 className="animate-spin" /> : 'حفظ الجلسة'}</button>
+                  </form>
+                </div>
+                <div className="lg:col-span-2 overflow-x-auto">
+                  <table className="w-full text-right bg-charcoal-900 border border-charcoal-800 rounded-2xl">
+                    <thead className="text-slate-400 border-b border-charcoal-800">
+                      <tr>
+                        <th className="p-4">التاريخ والرول</th>
+                        <th className="p-4">القضية والمحكمة</th>
+                        <th className="p-4">المطلوب</th>
+                        <th className="p-4">القرار</th>
+                        <th className="p-4">حذف</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {sessions.map(s => (
+                        <tr key={s.id} className={new Date(s.session_date).setHours(0,0,0,0) < new Date().setHours(0,0,0,0) ? 'opacity-50 grayscale' : ''}>
+                          <td className="p-4 font-mono">
+                            <span className="text-gold-500">{new Date(s.session_date).toLocaleDateString('ar-EG')}</span>
+                            {s.roll_number && <><br/><span className="text-slate-400 text-sm">رول: {s.roll_number}</span></>}
+                          </td>
+                          <td className="p-4 font-bold">
+                            {s.cases?.case_number}
+                            <br/><span className="text-sm font-normal text-slate-400">{s.court_name}</span>
+                          </td>
+                          <td className="p-4 text-sm text-slate-300">{s.requirements}</td>
+                          <td className="p-4">
+                            <input 
+                              type="text" 
+                              placeholder="القرار..." 
+                              defaultValue={s.decision || ''} 
+                              onBlur={async (e) => {
+                                await supabase.from('sessions').update({ decision: e.target.value }).eq('id', s.id);
+                              }}
+                              className="bg-charcoal-950 border border-slate-700 p-2 rounded text-sm outline-none w-full"
+                            />
+                          </td>
+                          <td className="p-4">
+                            <button onClick={() => deleteRecord('sessions', s.id)} className="text-red-500 p-2"><Trash2 size={18}/></button>
                           </td>
                         </tr>
                       ))}
