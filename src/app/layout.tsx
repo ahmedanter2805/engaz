@@ -10,6 +10,9 @@ const cairo = Cairo({
 export const metadata: Metadata = {
   title: "ENGAZ Law Firm - مؤسسة إنجاز للمحاماة",
   description: "الموقع الرسمي لمؤسسة إنجاز للمحاماة والاستشارات القانونية",
+  icons: {
+    icon: "/logo.jpg",
+  },
 };
 
 export default function RootLayout({
