@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Plus, Trash2, Edit, Users, Briefcase, FileText, Loader2, Calendar, LayoutDashboard, FolderOpen, LogOut, CheckCircle, Upload, X, Settings, DollarSign, Globe, PhoneCall, ShieldCheck, UserCheck, Clock, Archive, Activity } from 'lucide-react';
+import { Plus, Trash2, Edit, Users, Briefcase, FileText, Loader2, Calendar, LayoutDashboard, FolderOpen, LogOut, CheckCircle, Upload, X, Settings, DollarSign, Globe, PhoneCall, ShieldCheck, UserCheck, Clock, Archive, Activity, UserCog } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminDashboard() {
@@ -69,6 +69,7 @@ export default function AdminDashboard() {
   const [clientForm, setClientForm] = useState({ name: '', national_id: '', phone: '', email: '', address: '' });
   const [sessionForm, setSessionForm] = useState({ case_id: '', session_date: '', requirements: '', roll_number: '', court_name: '' });
   const [docForm, setDocForm] = useState({ case_id: '', title: '', document_type: 'توكيل', is_client_visible: false });
+  const [userForm, setUserForm] = useState({ email: '', full_name: '', role: 'lawyer', password: '' });
   const [uploadFile, setUploadFile] = useState<File | null>(null);
 
   const fetchData = async () => {
@@ -263,6 +264,40 @@ export default function AdminDashboard() {
     setIsSubmitting(false);
   };
 
+  const handleAddUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    // First create the auth user
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: userForm.email,
+      password: userForm.password,
+    });
+
+    if (authError) {
+      alert('خطأ في إنشاء الحساب: ' + authError.message);
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Then insert into users table if auth succeeded (assuming trigger doesn't exist, or we just update)
+    if (authData.user) {
+      const { error } = await supabase.from('users').upsert([
+        { id: authData.user.id, email: userForm.email, full_name: userForm.full_name, role: userForm.role }
+      ]);
+      
+      if (!error) {
+        setUserForm({ email: '', full_name: '', role: 'lawyer', password: '' });
+        fetchData();
+        alert('تم إنشاء المستخدم بنجاح! راجع بريدك لتأكيد الحساب (إذا كان مفعل).');
+      } else {
+        alert('خطأ في حفظ بيانات المستخدم: ' + error.message);
+      }
+    }
+    
+    setIsSubmitting(false);
+  };
+
   const deleteRecord = async (table: string, id: string) => {
     if (!confirm('هل أنت متأكد من الحذف النهائي؟')) return;
     await supabase.from(table).delete().eq('id', id);
@@ -298,6 +333,7 @@ export default function AdminDashboard() {
           { id: 'documents', icon: <Archive size={20}/>, label: 'الأرشيف الإلكتروني' },
           { id: 'resources', icon: <FileText size={20}/>, label: 'العقود والمقالات' },
           { id: 'pricing', icon: <DollarSign size={20}/>, label: 'أسعار الاستشارات' },
+          { id: 'users', icon: <UserCog size={20}/>, label: 'إدارة المستخدمين' },
           { id: 'audit', icon: <Activity size={20}/>, label: 'سجلات النظام' },
         ].map(item => (
           <button
@@ -805,6 +841,63 @@ export default function AdminDashboard() {
                           </td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* TAB: USERS */}
+          {activeTab === 'users' && (
+            <motion.div key="users" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <h1 className="text-3xl font-bold mb-8">إدارة المستخدمين والصلاحيات</h1>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="bg-charcoal-900 border border-charcoal-800 p-6 rounded-2xl h-fit">
+                  <h2 className="text-xl font-bold mb-4">إضافة مستخدم جديد</h2>
+                  <form onSubmit={handleAddUser} className="space-y-4">
+                    <input required type="text" placeholder="الاسم الكامل" value={userForm.full_name} onChange={e => setUserForm({...userForm, full_name: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
+                    <input required type="email" placeholder="البريد الإلكتروني" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none text-left" dir="ltr" />
+                    <input required type="password" placeholder="كلمة المرور" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none text-left" dir="ltr" />
+                    <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none">
+                      <option value="lawyer">محامي</option>
+                      <option value="admin">مدير نظام</option>
+                    </select>
+                    <button type="submit" disabled={isSubmitting} className="w-full bg-gradient-to-r from-gold-600 to-gold-400 hover:from-gold-500 hover:to-gold-300 text-charcoal-950 p-3 rounded-lg font-bold flex justify-center">{isSubmitting ? <Loader2 className="animate-spin" /> : 'إنشاء حساب'}</button>
+                  </form>
+                </div>
+                <div className="lg:col-span-2 overflow-x-auto">
+                  <table className="w-full text-right bg-charcoal-900 border border-charcoal-800 rounded-2xl">
+                    <thead className="text-slate-400 border-b border-charcoal-800">
+                      <tr>
+                        <th className="p-4">الاسم</th>
+                        <th className="p-4">البريد الإلكتروني</th>
+                        <th className="p-4">الصلاحية</th>
+                        <th className="p-4">حذف</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {users.map(u => (
+                        <tr key={u.id}>
+                          <td className="p-4 font-bold">{u.full_name}</td>
+                          <td className="p-4 text-sm font-mono text-slate-300">{u.email}</td>
+                          <td className="p-4">
+                            {u.role === 'admin' ? (
+                              <span className="bg-red-500/10 text-red-500 px-3 py-1 rounded-full text-xs font-bold border border-red-500/20">مدير نظام</span>
+                            ) : (
+                              <span className="bg-blue-500/10 text-blue-400 px-3 py-1 rounded-full text-xs font-bold border border-blue-500/20">محامي</span>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            <button onClick={() => deleteRecord('users', u.id)} className="text-red-500 p-2"><Trash2 size={18}/></button>
+                          </td>
+                        </tr>
+                      ))}
+                      {users.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="p-8 text-center text-slate-500">لا يوجد مستخدمين مسجلين بعد.</td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
