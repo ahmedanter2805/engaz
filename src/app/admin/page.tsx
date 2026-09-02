@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Plus, Trash2, Edit, Users, Briefcase, FileText, Loader2, Calendar, LayoutDashboard, FolderOpen, LogOut, CheckCircle, Upload, X, Settings, DollarSign, Globe, PhoneCall, ShieldCheck, UserCheck, Clock } from 'lucide-react';
+import { Plus, Trash2, Edit, Users, Briefcase, FileText, Loader2, Calendar, LayoutDashboard, FolderOpen, LogOut, CheckCircle, Upload, X, Settings, DollarSign, Globe, PhoneCall, ShieldCheck, UserCheck, Clock, Archive, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminDashboard() {
@@ -55,6 +55,9 @@ export default function AdminDashboard() {
 
   const [clients, setClients] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
 
   // Form States
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -65,18 +68,22 @@ export default function AdminDashboard() {
   const [caseForm, setCaseForm] = useState({ case_number: '', client_name: '', title: '', status: 'شغالة', client_id: '' });
   const [clientForm, setClientForm] = useState({ name: '', national_id: '', phone: '', email: '', address: '' });
   const [sessionForm, setSessionForm] = useState({ case_id: '', session_date: '', requirements: '', roll_number: '', court_name: '' });
+  const [docForm, setDocForm] = useState({ case_id: '', title: '', document_type: 'توكيل', is_client_visible: false });
   const [uploadFile, setUploadFile] = useState<File | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
-    const [lawyersRes, consRes, resRes, casesRes, settingsRes, clientsRes, sessionsRes] = await Promise.all([
+    const [lawyersRes, consRes, resRes, casesRes, settingsRes, clientsRes, sessionsRes, docsRes, logsRes, usersRes] = await Promise.all([
       supabase.from('lawyers').select('*').order('created_at', { ascending: false }),
       supabase.from('consultations').select('*').order('created_at', { ascending: false }),
       supabase.from('resources').select('*').order('created_at', { ascending: false }),
       supabase.from('cases').select('*').order('created_at', { ascending: false }),
       supabase.from('settings').select('*'),
       supabase.from('clients').select('*').order('created_at', { ascending: false }),
-      supabase.from('sessions').select(`*, cases (case_number, title)`).order('session_date', { ascending: true })
+      supabase.from('sessions').select(`*, cases (case_number, title)`).order('session_date', { ascending: true }),
+      supabase.from('documents').select(`*, cases (case_number, title)`).order('created_at', { ascending: false }),
+      supabase.from('audit_logs').select(`*, users(full_name)`).order('created_at', { ascending: false }).limit(50),
+      supabase.from('users').select('*').order('created_at', { ascending: false })
     ]);
 
     if (lawyersRes.data) setLawyers(lawyersRes.data);
@@ -85,6 +92,9 @@ export default function AdminDashboard() {
     if (casesRes.data) setCases(casesRes.data);
     if (clientsRes.data) setClients(clientsRes.data);
     if (sessionsRes.data) setSessions(sessionsRes.data);
+    if (docsRes.data) setDocuments(docsRes.data);
+    if (logsRes.data) setAuditLogs(logsRes.data);
+    if (usersRes.data) setUsers(usersRes.data);
     
     // Load Settings
     if (settingsRes.data && settingsRes.data.length > 0) {
@@ -232,6 +242,27 @@ export default function AdminDashboard() {
     setIsSubmitting(false);
   };
 
+  const handleAddDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadFile) return alert('برجاء اختيار الملف');
+    setIsSubmitting(true);
+    
+    let fileUrl = '';
+    const fileExt = uploadFile.name.split('.').pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+    const { data: uploadData, error: uploadError } = await supabase.storage.from('case-files').upload(fileName, uploadFile);
+    if (uploadError) { alert('خطأ في الرفع: ' + uploadError.message); setIsSubmitting(false); return; }
+    fileUrl = supabase.storage.from('case-files').getPublicUrl(fileName).data.publicUrl;
+
+    const { error } = await supabase.from('documents').insert([{ ...docForm, file_url: fileUrl }]);
+    if (!error) { 
+      setDocForm({ case_id: '', title: '', document_type: 'توكيل', is_client_visible: false }); 
+      setUploadFile(null);
+      fetchData(); 
+    } else alert('خطأ: ' + error.message);
+    setIsSubmitting(false);
+  };
+
   const deleteRecord = async (table: string, id: string) => {
     if (!confirm('هل أنت متأكد من الحذف النهائي؟')) return;
     await supabase.from(table).delete().eq('id', id);
@@ -264,8 +295,10 @@ export default function AdminDashboard() {
           { id: 'lawyers', icon: <Users size={20}/>, label: 'المحامين' },
           { id: 'cases', icon: <FolderOpen size={20}/>, label: 'القضايا' },
           { id: 'sessions', icon: <Clock size={20}/>, label: 'أجندة الجلسات' },
+          { id: 'documents', icon: <Archive size={20}/>, label: 'الأرشيف الإلكتروني' },
           { id: 'resources', icon: <FileText size={20}/>, label: 'العقود والمقالات' },
           { id: 'pricing', icon: <DollarSign size={20}/>, label: 'أسعار الاستشارات' },
+          { id: 'audit', icon: <Activity size={20}/>, label: 'سجلات النظام' },
         ].map(item => (
           <button
             key={item.id}
@@ -708,6 +741,113 @@ export default function AdminDashboard() {
                           </td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* TAB: DOCUMENTS (DMS) */}
+          {activeTab === 'documents' && (
+            <motion.div key="documents" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <h1 className="text-3xl font-bold mb-8">الأرشيف الإلكتروني</h1>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="bg-charcoal-900 border border-charcoal-800 p-6 rounded-2xl h-fit">
+                  <h2 className="text-xl font-bold mb-4">رفع مستند جديد</h2>
+                  <form onSubmit={handleAddDocument} className="space-y-4">
+                    <select required value={docForm.case_id} onChange={e => setDocForm({...docForm, case_id: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none">
+                      <option value="">اختر القضية (الرقم)...</option>
+                      {cases.map(c => <option key={c.id} value={c.id}>{c.case_number} - {c.title}</option>)}
+                    </select>
+                    <input required type="text" placeholder="عنوان المستند" value={docForm.title} onChange={e => setDocForm({...docForm, title: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
+                    <select value={docForm.document_type} onChange={e => setDocForm({...docForm, document_type: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none">
+                      <option value="توكيل">توكيل</option>
+                      <option value="مذكرة">مذكرة دعوى</option>
+                      <option value="عقد">عقد</option>
+                      <option value="حكم">حكم محكمة</option>
+                      <option value="أخرى">أخرى</option>
+                    </select>
+                    <label className="flex items-center gap-3 cursor-pointer text-sm text-slate-300">
+                      <input type="checkbox" checked={docForm.is_client_visible} onChange={e => setDocForm({...docForm, is_client_visible: e.target.checked})} className="w-4 h-4 rounded border-charcoal-700 text-gold-500 focus:ring-gold-500" />
+                      إتاحة للموكل رؤيته في بوابته؟
+                    </label>
+                    <div className="border border-dashed border-slate-700 p-4 rounded-lg text-center cursor-pointer hover:bg-charcoal-800">
+                      <input type="file" onChange={e => e.target.files && setUploadFile(e.target.files[0])} className="w-full text-sm" />
+                    </div>
+                    <button type="submit" disabled={isSubmitting} className="w-full bg-gradient-to-r from-gold-600 to-gold-400 hover:from-gold-500 hover:to-gold-300 text-charcoal-950 p-3 rounded-lg font-bold flex justify-center">{isSubmitting ? <Loader2 className="animate-spin" /> : 'رفع الأرشيف'}</button>
+                  </form>
+                </div>
+                <div className="lg:col-span-2 overflow-x-auto">
+                  <table className="w-full text-right bg-charcoal-900 border border-charcoal-800 rounded-2xl">
+                    <thead className="text-slate-400 border-b border-charcoal-800">
+                      <tr>
+                        <th className="p-4">القضية</th>
+                        <th className="p-4">المستند</th>
+                        <th className="p-4">رؤية العميل</th>
+                        <th className="p-4">معاينة</th>
+                        <th className="p-4">حذف</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {documents.map(d => (
+                        <tr key={d.id}>
+                          <td className="p-4 font-mono">{d.cases?.case_number}</td>
+                          <td className="p-4 font-bold">{d.title} <br/><span className="text-sm font-normal text-gold-500">{d.document_type}</span></td>
+                          <td className="p-4">
+                            {d.is_client_visible ? <span className="text-green-500">متاح للموكل</span> : <span className="text-slate-500">سري للمكتب</span>}
+                          </td>
+                          <td className="p-4">
+                            <a href={d.file_url} target="_blank" className="text-blue-400 hover:underline">عرض</a>
+                          </td>
+                          <td className="p-4">
+                            <button onClick={() => deleteRecord('documents', d.id)} className="text-red-500 p-2"><Trash2 size={18}/></button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* TAB: AUDIT LOGS */}
+          {activeTab === 'audit' && (
+            <motion.div key="audit" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <h1 className="text-3xl font-bold mb-8">سجلات النظام (Audit Logs)</h1>
+              <div className="bg-charcoal-900 border border-charcoal-800 rounded-2xl p-6">
+                <p className="text-sm text-slate-400 mb-6">هذه القائمة تعرض آخر العمليات التي تمت على النظام للمراقبة.</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-right">
+                    <thead className="text-slate-400 border-b border-charcoal-800">
+                      <tr>
+                        <th className="p-4">الوقت</th>
+                        <th className="p-4">المستخدم (المحامي)</th>
+                        <th className="p-4">الإجراء</th>
+                        <th className="p-4">التفاصيل</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {auditLogs.map(log => (
+                        <tr key={log.id} className="hover:bg-charcoal-800/50">
+                          <td className="p-4 text-sm text-slate-400 font-mono" dir="ltr">
+                            {new Date(log.created_at).toLocaleString('ar-EG')}
+                          </td>
+                          <td className="p-4 font-bold">{log.users?.full_name || 'غير معروف'}</td>
+                          <td className="p-4">
+                            <span className="bg-charcoal-800 text-gold-400 px-3 py-1 rounded text-sm">{log.action_type}</span>
+                          </td>
+                          <td className="p-4 text-sm text-slate-300">
+                            {log.details ? JSON.stringify(log.details) : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                      {auditLogs.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="p-8 text-center text-slate-500">لا توجد سجلات حالياً.</td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
