@@ -30,6 +30,8 @@ export default function AdminDashboard() {
   // Form States
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lawyerForm, setLawyerForm] = useState({ name: '', title: '', experience_years: '', bio: '', image_url: '' });
+  const [lawyerImage, setLawyerImage] = useState<File | null>(null);
+  const [lawyerImagePreview, setLawyerImagePreview] = useState('');
   const [resourceForm, setResourceForm] = useState({ title: '', type: 'template', content: '' });
   const [caseForm, setCaseForm] = useState({ case_number: '', client_name: '', title: '', status: 'شغالة' });
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -59,11 +61,32 @@ export default function AdminDashboard() {
   const handleAddLawyer = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const { error } = await supabase.from('lawyers').insert([
-      { ...lawyerForm, experience_years: parseInt(lawyerForm.experience_years) || 0 }
-    ]);
-    if (!error) { setLawyerForm({ name: '', title: '', experience_years: '', bio: '', image_url: '' }); fetchData(); }
-    else alert('خطأ: ' + error.message);
+    try {
+      let imageUrl = '';
+      
+      // Upload lawyer image if provided
+      if (lawyerImage) {
+        const fileExt = lawyerImage.name.split('.').pop();
+        const fileName = `lawyer-${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage.from('case-files').upload(`lawyers/${fileName}`, lawyerImage);
+        if (uploadError) throw uploadError;
+        
+        const { data: urlData } = supabase.storage.from('case-files').getPublicUrl(`lawyers/${fileName}`);
+        imageUrl = urlData.publicUrl;
+      }
+      
+      const { error } = await supabase.from('lawyers').insert([
+        { ...lawyerForm, experience_years: parseInt(lawyerForm.experience_years) || 0, image_url: imageUrl }
+      ]);
+      if (error) throw error;
+      
+      setLawyerForm({ name: '', title: '', experience_years: '', bio: '', image_url: '' });
+      setLawyerImage(null);
+      setLawyerImagePreview('');
+      fetchData();
+    } catch (error: any) {
+      alert('خطأ: ' + (error.message || 'حدث خطأ أثناء الحفظ'));
+    }
     setIsSubmitting(false);
   };
 
@@ -273,19 +296,55 @@ export default function AdminDashboard() {
                 <div className="bg-charcoal-900 border border-charcoal-800 p-6 rounded-2xl h-fit">
                   <h2 className="text-xl font-bold mb-4">إضافة محامي</h2>
                   <form onSubmit={handleAddLawyer} className="space-y-4">
+                    {/* Image Upload */}
+                    <div className="flex flex-col items-center">
+                      <label className="w-full cursor-pointer">
+                        <div className={`w-full h-40 rounded-xl border-2 border-dashed flex flex-col items-center justify-center transition-colors ${lawyerImagePreview ? 'border-gold-500/50' : 'border-charcoal-800 hover:border-gold-500/30'}`}>
+                          {lawyerImagePreview ? (
+                            <img src={lawyerImagePreview} alt="Preview" className="w-full h-full object-cover rounded-xl" />
+                          ) : (
+                            <>
+                              <Upload className="h-8 w-8 text-slate-500 mb-2" />
+                              <span className="text-sm text-slate-400">اضغط لرفع صورة المحامي</span>
+                              <span className="text-xs text-slate-500 mt-1">JPG, PNG (حد أقصى 5MB)</span>
+                            </>
+                          )}
+                        </div>
+                        <input type="file" accept="image/jpeg,image/png,image/jpg" className="hidden" onChange={e => {
+                          if (e.target.files && e.target.files[0]) {
+                            const file = e.target.files[0];
+                            if (file.size > 5 * 1024 * 1024) { alert('حجم الصورة يجب ألا يتجاوز 5 ميجابايت.'); return; }
+                            setLawyerImage(file);
+                            setLawyerImagePreview(URL.createObjectURL(file));
+                          }
+                        }} />
+                      </label>
+                      {lawyerImagePreview && (
+                        <button type="button" onClick={() => { setLawyerImage(null); setLawyerImagePreview(''); }} className="text-red-400 text-xs mt-2 hover:text-red-300">إزالة الصورة</button>
+                      )}
+                    </div>
                     <input required type="text" placeholder="الاسم" value={lawyerForm.name} onChange={e => setLawyerForm({...lawyerForm, name: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
                     <input required type="text" placeholder="المسمى (مثال: محامي نقض)" value={lawyerForm.title} onChange={e => setLawyerForm({...lawyerForm, title: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
                     <input required type="number" placeholder="سنوات الخبرة" value={lawyerForm.experience_years} onChange={e => setLawyerForm({...lawyerForm, experience_years: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
                     <textarea placeholder="نبذة عن المحامي" rows={3} value={lawyerForm.bio} onChange={e => setLawyerForm({...lawyerForm, bio: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none resize-none" />
-                    <button type="submit" disabled={isSubmitting} className="w-full bg-amber-600 hover:bg-amber-700 p-3 rounded-lg font-bold flex justify-center">{isSubmitting ? <Loader2 className="animate-spin" /> : 'حفظ'}</button>
+                    <button type="submit" disabled={isSubmitting} className="w-full bg-gradient-to-r from-gold-600 to-gold-400 hover:from-gold-500 hover:to-gold-300 text-charcoal-950 p-3 rounded-lg font-bold flex justify-center">{isSubmitting ? <Loader2 className="animate-spin" /> : 'حفظ'}</button>
                   </form>
                 </div>
                 <div className="lg:col-span-2 grid gap-4">
                   {lawyers.map(l => (
                     <div key={l.id} className="bg-charcoal-900 border border-charcoal-800 p-4 rounded-xl flex justify-between items-center">
-                      <div>
-                        <h3 className="font-bold text-lg">{l.name} <span className="text-sm font-normal text-gold-500 bg-gold-500/10 px-2 py-1 rounded ml-2">{l.title}</span></h3>
-                        <p className="text-sm text-slate-400 mt-1">خبرة: {l.experience_years} سنوات</p>
+                      <div className="flex items-center gap-4">
+                        {l.image_url ? (
+                          <img src={l.image_url} alt={l.name} className="w-14 h-14 rounded-full object-cover border-2 border-gold-500/30" />
+                        ) : (
+                          <div className="w-14 h-14 rounded-full bg-charcoal-800 flex items-center justify-center border-2 border-charcoal-800">
+                            <Users size={24} className="text-slate-500" />
+                          </div>
+                        )}
+                        <div>
+                          <h3 className="font-bold text-lg">{l.name} <span className="text-sm font-normal text-gold-500 bg-gold-500/10 px-2 py-1 rounded ml-2">{l.title}</span></h3>
+                          <p className="text-sm text-slate-400 mt-1">خبرة: {l.experience_years} سنوات</p>
+                        </div>
                       </div>
                       <button onClick={() => deleteRecord('lawyers', l.id)} className="text-red-500 bg-red-500/10 p-2 rounded-lg hover:bg-red-500/20"><Trash2 size={20}/></button>
                     </div>
