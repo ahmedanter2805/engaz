@@ -10,54 +10,104 @@ export default function Home() {
   const [resources, setResources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Dynamic Content States
+  const [siteContent, setSiteContent] = useState({
+    hero_title: 'شريكك القانوني الموثوق',
+    hero_subtitle: 'خبرة قانونية تتجاوز التوقعات',
+    hero_description: 'نقدم لك استشارة مبنية على الصدق، السرية، والدقة القانونية. التزام كامل ومتابعة حقيقية لقضاياك لأن القانون ليس مجرد نصوص، بل مسؤولية.',
+    feature1_title: 'سرية تامة',
+    feature1_desc: 'التزام كامل بالسرية التامة لجميع بيانات وملفات عملائنا.',
+    feature2_title: 'شرح مبسّط',
+    feature2_desc: 'نقدم لك شرحاً قانونياً مبسّطاً يجعلك على دراية كاملة بموقفك.',
+    feature3_title: 'متابعة حقيقية',
+    feature3_desc: 'متابعة حقيقية ومستمرة للقضايا لضمان عدم تفويت أي فرصة.',
+    feature4_title: 'اهتمام بالتفاصيل',
+    feature4_desc: 'ندرس كل ملف بدقة متناهية لأننا نؤمن أن كسب القضايا يبدأ من التفاصيل.'
+  });
+
+  const [contactData, setContactData] = useState({
+    phone: '01035849900',
+    email: 'info@engazlawfirm.com',
+    address: 'شارع النصر الرئيسي، بجوار مستشفى كليوباترا، الغردقة، البحر الأحمر، مصر',
+    whatsapp: '201035849900',
+    facebook: 'https://www.facebook.com/profile.php?id=61586711903589',
+    working_hours: 'السبت - الأربعاء: 09:00 - 17:00\nالخميس: 09:00 - 14:00\nالجمعة: مغلق'
+  });
+
+  const [prices, setPrices] = useState({
+    video_default: 500,
+    video_commercial: 1000,
+    phone_default: 500,
+    phone_commercial: 1000,
+    office_default: 1000,
+    office_commercial: 1500,
+  });
+
   // Booking Form State
   const [consultationType, setConsultationType] = useState('جنائي');
-  const [meetingType, setMeetingType] = useState('فيديو كول');
+  const [meetingType, setMeetingType] = useState('فيديو كول (Zoom/Meet)');
   const [selectedLawyer, setSelectedLawyer] = useState('');
   const [bookingDate, setBookingDate] = useState('');
   const [bookingTime, setBookingTime] = useState('');
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [bookingSuccess, setBookingSuccess] = useState(false);
+  const [estimatedPrice, setEstimatedPrice] = useState(0);
 
   // File Upload State
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState('');
 
   useEffect(() => {
-    fetchLawyers();
-    fetchResources();
+    fetchData();
   }, []);
 
-  async function fetchLawyers() {
+  async function fetchData() {
     try {
-      const { data, error } = await supabase.from('lawyers').select('*');
-      if (error) throw error;
-      if (data) setLawyers(data);
+      const [lawyersRes, resRes, settingsRes] = await Promise.all([
+        supabase.from('lawyers').select('*'),
+        supabase.from('resources').select('*'),
+        supabase.from('settings').select('*')
+      ]);
+      
+      if (lawyersRes.data) setLawyers(lawyersRes.data);
+      if (resRes.data) setResources(resRes.data);
+      
+      if (settingsRes.data && settingsRes.data.length > 0) {
+        const pricesSetting = settingsRes.data.find(s => s.id === 'consultation_prices');
+        if (pricesSetting) setPrices(pricesSetting.value);
+        
+        const contentSetting = settingsRes.data.find(s => s.id === 'site_content');
+        if (contentSetting) setSiteContent(contentSetting.value);
+        
+        const contactSetting = settingsRes.data.find(s => s.id === 'contact_data');
+        if (contactSetting) setContactData(contactSetting.value);
+      }
     } catch (error) {
-      console.error('Error fetching lawyers:', error);
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
   }
 
-  async function fetchResources() {
-    try {
-      const { data, error } = await supabase.from('resources').select('*');
-      if (error) throw error;
-      if (data) setResources(data);
-    } catch (error) {
-      console.error('Error fetching resources:', error);
+  // Calculate Price whenever consultation or meeting type changes
+  useEffect(() => {
+    let currentPrice = 0;
+    const isCommercial = consultationType === 'تجاري';
+    
+    if (meetingType.includes('فيديو')) {
+      currentPrice = isCommercial ? prices.video_commercial : prices.video_default;
+    } else if (meetingType.includes('هاتفية')) {
+      currentPrice = isCommercial ? prices.phone_commercial : prices.phone_default;
+    } else if (meetingType.includes('حضور')) {
+      currentPrice = isCommercial ? prices.office_commercial : prices.office_default;
     }
-  }
+    setEstimatedPrice(currentPrice);
+  }, [consultationType, meetingType, prices]);
 
   const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      let price = 500;
-      if (meetingType === 'حضور لمقر المكتب') price = 1000;
-      if (consultationType === 'تجاري') price += 500;
-
       const { data, error } = await supabase.from('consultations').insert([
         {
           client_name: clientName,
@@ -67,9 +117,11 @@ export default function Home() {
           lawyer_id: selectedLawyer || null,
           booking_date: bookingDate,
           booking_time: bookingTime,
-          price: price,
+          price: estimatedPrice,
+          status: 'pending'
         }
       ]);
+
       if (error) throw error;
       setBookingSuccess(true);
       setTimeout(() => setBookingSuccess(false), 5000);
@@ -175,18 +227,17 @@ export default function Home() {
           <motion.div initial="hidden" animate="visible" variants={fadeUp}>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-gold-500/30 bg-gold-500/5 text-gold-400 text-sm font-medium mb-8">
               <Shield className="h-4 w-4" />
-              <span>خبرة قانونية تتجاوز التوقعات</span>
+              <span>{siteContent.hero_subtitle}</span>
             </div>
             
             <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 leading-[1.2] text-white">
-              شريكك القانوني <br className="hidden md:block"/>
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-gold-300 via-gold-500 to-gold-600">
-                الموثوق
+                {siteContent.hero_title}
               </span>
             </h1>
             
-            <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto mb-10 font-light leading-relaxed">
-              نقدم لك استشارة مبنية على الصدق، السرية، والدقة القانونية. التزام كامل ومتابعة حقيقية لقضاياك لأن القانون ليس مجرد نصوص، بل مسؤولية.
+            <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto mb-10 font-light leading-relaxed whitespace-pre-line">
+              {siteContent.hero_description}
             </p>
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -216,17 +267,17 @@ export default function Home() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { title: 'سرية تامة', desc: 'التزام كامل بالسرية التامة لجميع بيانات وملفات عملائنا (Full confidentiality).' },
-              { title: 'شرح مبسّط', desc: 'نقدم لك شرحاً قانونياً مبسّطاً يجعلك على دراية كاملة بموقفك القانوني.' },
-              { title: 'متابعة حقيقية', desc: 'متابعة حقيقية ومستمرة للقضايا لضمان عدم تفويت أي فرصة لصالحك.' },
-              { title: 'اهتمام بالتفاصيل', desc: 'ندرس كل ملف بدقة متناهية لأننا نؤمن أن كسب القضايا يبدأ من دراسة التفاصيل.' }
+              { title: siteContent.feature1_title, desc: siteContent.feature1_desc },
+              { title: siteContent.feature2_title, desc: siteContent.feature2_desc },
+              { title: siteContent.feature3_title, desc: siteContent.feature3_desc },
+              { title: siteContent.feature4_title, desc: siteContent.feature4_desc }
             ].map((service, index) => (
               <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }} viewport={{ once: true }} key={index} className="bg-charcoal-950 border border-slate-800/80 rounded-xl p-8 hover:border-gold-500/50 transition-colors group">
                 <div className="bg-charcoal-900 w-14 h-14 rounded-lg flex items-center justify-center mb-6 border border-slate-800 group-hover:border-gold-500/30 transition-colors">
                   <CheckCircle className="h-7 w-7 text-gold-500" />
                 </div>
                 <h3 className="text-xl font-bold text-white mb-3">{service.title}</h3>
-                <p className="text-slate-400 leading-relaxed text-sm">{service.desc}</p>
+                <p className="text-slate-400 leading-relaxed text-sm whitespace-pre-line">{service.desc}</p>
               </motion.div>
             ))}
           </div>
@@ -482,7 +533,7 @@ export default function Home() {
                 شريكك القانوني الموثوق، نقدم استشارات مبنية على الصدق، السرية، والدقة القانونية لحماية مصالحك.
               </p>
               <div className="flex gap-4">
-                <a href="https://www.facebook.com/profile.php?id=61586711903589" target="_blank" rel="noreferrer" className="bg-charcoal-800 border border-slate-700 hover:border-gold-500 p-3 rounded-full text-slate-300 hover:text-gold-400 transition-colors">
+                <a href={contactData.facebook} target="_blank" rel="noreferrer" className="bg-charcoal-800 border border-slate-700 hover:border-gold-500 p-3 rounded-full text-slate-300 hover:text-gold-400 transition-colors">
                   <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" /></svg>
                 </a>
               </div>
@@ -493,35 +544,24 @@ export default function Home() {
               <ul className="space-y-4">
                 <li className="flex items-start gap-3 text-slate-400">
                   <PhoneCall className="h-5 w-5 text-gold-500 flex-shrink-0 mt-0.5" />
-                  <a href="tel:+201035849900" dir="ltr" className="font-mono text-sm hover:text-gold-400 transition-colors">+20 10 35849900</a>
+                  <a href={`tel:${contactData.phone.replace(/[^0-9+]/g, '')}`} dir="ltr" className="font-mono text-sm hover:text-gold-400 transition-colors">{contactData.phone}</a>
                 </li>
                 <li className="flex items-start gap-3 text-slate-400">
                   <Mail className="h-5 w-5 text-gold-500 flex-shrink-0 mt-0.5" />
-                  <a href="mailto:info@engazlawfirm.com" className="text-sm font-mono text-slate-300 hover:text-gold-400 transition-colors">info@engazlawfirm.com</a>
+                  <a href={`mailto:${contactData.email}`} className="text-sm font-mono text-slate-300 hover:text-gold-400 transition-colors">{contactData.email}</a>
                 </li>
                 <li className="flex items-start gap-3 text-slate-400">
                   <MapPin className="h-5 w-5 text-gold-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-sm leading-relaxed">شارع النصر الرئيسي، بجوار مستشفى كليوباترا<br/>الغردقة، البحر الأحمر، مصر</span>
+                  <span className="text-sm leading-relaxed whitespace-pre-line">{contactData.address}</span>
                 </li>
               </ul>
             </div>
 
             <div>
               <h4 className="text-white font-bold mb-6 tracking-wider">مواعيد العمل</h4>
-              <ul className="space-y-4 text-sm text-slate-400">
-                <li className="flex justify-between border-b border-slate-800 pb-2">
-                  <span>السبت - الأربعاء</span>
-                  <span className="font-mono text-gold-400">09:00 - 17:00</span>
-                </li>
-                <li className="flex justify-between border-b border-slate-800 pb-2">
-                  <span>الخميس</span>
-                  <span className="font-mono text-gold-400">09:00 - 14:00</span>
-                </li>
-                <li className="flex justify-between pb-2">
-                  <span>الجمعة</span>
-                  <span className="text-red-400/80">مغلق</span>
-                </li>
-              </ul>
+              <p className="text-sm text-slate-400 whitespace-pre-line leading-loose">
+                {contactData.working_hours}
+              </p>
             </div>
 
           </div>
@@ -537,7 +577,7 @@ export default function Home() {
       </footer>
       {/* Floating WhatsApp Button */}
       <a 
-        href="https://wa.me/201035849900" 
+        href={`https://wa.me/${contactData.whatsapp.replace(/[^0-9]/g, '')}`} 
         target="_blank" 
         rel="noreferrer"
         className="fixed bottom-6 right-6 z-50 bg-[#25D366] hover:bg-[#1ebd5b] text-white p-4 rounded-full shadow-lg shadow-green-500/30 hover:shadow-green-500/50 transition-all hover:-translate-y-1"

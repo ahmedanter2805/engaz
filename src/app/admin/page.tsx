@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Plus, Trash2, Edit, Users, Briefcase, FileText, Loader2, Calendar, LayoutDashboard, FolderOpen, LogOut, CheckCircle, Upload, X, Settings, DollarSign } from 'lucide-react';
+import { Plus, Trash2, Edit, Users, Briefcase, FileText, Loader2, Calendar, LayoutDashboard, FolderOpen, LogOut, CheckCircle, Upload, X, Settings, DollarSign, Globe, PhoneCall, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function AdminDashboard() {
@@ -27,6 +27,32 @@ export default function AdminDashboard() {
   const [priceSaving, setPriceSaving] = useState(false);
   const [priceSaved, setPriceSaved] = useState(false);
 
+  // Content & Contact States
+  const [siteContent, setSiteContent] = useState({
+    hero_title: 'شريكك القانوني الموثوق',
+    hero_subtitle: 'خبرة قانونية تتجاوز التوقعات',
+    hero_description: 'نقدم لك استشارة مبنية على الصدق، السرية، والدقة القانونية. التزام كامل ومتابعة حقيقية لقضاياك لأن القانون ليس مجرد نصوص، بل مسؤولية.',
+    feature1_title: 'سرية تامة',
+    feature1_desc: 'التزام كامل بالسرية التامة لجميع بيانات وملفات عملائنا.',
+    feature2_title: 'شرح مبسّط',
+    feature2_desc: 'نقدم لك شرحاً قانونياً مبسّطاً يجعلك على دراية كاملة بموقفك.',
+    feature3_title: 'متابعة حقيقية',
+    feature3_desc: 'متابعة حقيقية ومستمرة للقضايا لضمان عدم تفويت أي فرصة.',
+    feature4_title: 'اهتمام بالتفاصيل',
+    feature4_desc: 'ندرس كل ملف بدقة متناهية لأننا نؤمن أن كسب القضايا يبدأ من التفاصيل.'
+  });
+
+  const [contactData, setContactData] = useState({
+    phone: '01035849900',
+    email: 'info@engazlawfirm.com',
+    address: 'شارع النصر الرئيسي، بجوار مستشفى كليوباترا، الغردقة، البحر الأحمر، مصر',
+    whatsapp: '201035849900',
+    facebook: 'https://facebook.com',
+    working_hours: 'السبت - الأربعاء: 09:00 - 17:00\nالخميس: 09:00 - 14:00\nالجمعة: مغلق'
+  });
+
+  const [settingsSaving, setSettingsSaving] = useState(false);
+
   // Form States
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lawyerForm, setLawyerForm] = useState({ name: '', title: '', experience_years: '', bio: '', image_url: '' });
@@ -38,17 +64,35 @@ export default function AdminDashboard() {
 
   const fetchData = async () => {
     setLoading(true);
-    const [lawyersRes, consRes, resRes, casesRes] = await Promise.all([
+    const [lawyersRes, consRes, resRes, casesRes, settingsRes] = await Promise.all([
       supabase.from('lawyers').select('*').order('created_at', { ascending: false }),
       supabase.from('consultations').select('*').order('created_at', { ascending: false }),
       supabase.from('resources').select('*').order('created_at', { ascending: false }),
-      supabase.from('cases').select('*').order('created_at', { ascending: false })
+      supabase.from('cases').select('*').order('created_at', { ascending: false }),
+      supabase.from('settings').select('*')
     ]);
 
     if (lawyersRes.data) setLawyers(lawyersRes.data);
     if (consRes.data) setConsultations(consRes.data);
     if (resRes.data) setResources(resRes.data);
     if (casesRes.data) setCases(casesRes.data);
+    
+    // Load Settings
+    if (settingsRes.data && settingsRes.data.length > 0) {
+      const pricesSetting = settingsRes.data.find(s => s.id === 'consultation_prices');
+      if (pricesSetting) setPrices(pricesSetting.value);
+      
+      const contentSetting = settingsRes.data.find(s => s.id === 'site_content');
+      if (contentSetting) setSiteContent(contentSetting.value);
+      
+      const contactSetting = settingsRes.data.find(s => s.id === 'contact_data');
+      if (contactSetting) setContactData(contactSetting.value);
+    } else {
+      // Fallback to local storage if DB table not created yet
+      const p = localStorage.getItem('consultation_prices'); if (p) setPrices(JSON.parse(p));
+      const c = localStorage.getItem('site_content'); if (c) setSiteContent(JSON.parse(c));
+      const ct = localStorage.getItem('contact_data'); if (ct) setContactData(JSON.parse(ct));
+    }
     
     setLoading(false);
   };
@@ -172,9 +216,11 @@ export default function AdminDashboard() {
       <h2 className="text-2xl font-bold text-gold-500 mb-10 flex items-center gap-2">
         <Briefcase size={24} /> إنجاز للأدمن
       </h2>
-      <nav className="flex-1 space-y-2">
+      <nav className="flex-1 space-y-2 overflow-y-auto pr-2 pb-4">
         {[
           { id: 'dashboard', icon: <LayoutDashboard size={20}/>, label: 'الرئيسية' },
+          { id: 'content', icon: <Globe size={20}/>, label: 'محتوى الموقع' },
+          { id: 'contact', icon: <PhoneCall size={20}/>, label: 'بيانات التواصل' },
           { id: 'consultations', icon: <Calendar size={20}/>, label: 'الاستشارات' },
           { id: 'lawyers', icon: <Users size={20}/>, label: 'المحامين' },
           { id: 'cases', icon: <FolderOpen size={20}/>, label: 'القضايا' },
@@ -225,6 +271,109 @@ export default function AdminDashboard() {
                 <div className="bg-charcoal-900 border border-charcoal-800 p-6 rounded-2xl">
                   <h3 className="text-slate-400 mb-2">العقود/المقالات</h3>
                   <p className="text-4xl font-bold text-emerald-500">{resources.length}</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* TAB: CONTENT */}
+          {activeTab === 'content' && (
+            <motion.div key="content" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="flex justify-between items-center mb-8">
+                <h1 className="text-3xl font-bold">إدارة محتوى الموقع</h1>
+                <button 
+                  onClick={async () => {
+                    setSettingsSaving(true);
+                    const { error } = await supabase.from('settings').upsert({ id: 'site_content', value: siteContent }, { onConflict: 'id' });
+                    if (error) localStorage.setItem('site_content', JSON.stringify(siteContent));
+                    setSettingsSaving(false); alert('تم الحفظ!');
+                  }}
+                  disabled={settingsSaving}
+                  className="bg-gold-500 hover:bg-gold-400 text-charcoal-950 px-6 py-2 rounded-lg font-bold flex items-center gap-2"
+                >
+                  {settingsSaving ? <Loader2 className="animate-spin h-5 w-5" /> : 'حفظ التغييرات'}
+                </button>
+              </div>
+
+              <div className="space-y-8">
+                <div className="bg-charcoal-900 border border-charcoal-800 p-6 rounded-2xl space-y-4">
+                  <h3 className="text-xl font-bold mb-4 text-gold-500">القسم الرئيسي (Hero)</h3>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">العنوان الصغير فوق (Subtitle)</label>
+                    <input type="text" value={siteContent.hero_subtitle} onChange={e => setSiteContent({...siteContent, hero_subtitle: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">العنوان الرئيسي الملون (Title)</label>
+                    <input type="text" value={siteContent.hero_title} onChange={e => setSiteContent({...siteContent, hero_title: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">وصف المكتب (Description)</label>
+                    <textarea rows={3} value={siteContent.hero_description} onChange={e => setSiteContent({...siteContent, hero_description: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none resize-none" />
+                  </div>
+                </div>
+
+                <div className="bg-charcoal-900 border border-charcoal-800 p-6 rounded-2xl grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="md:col-span-2"><h3 className="text-xl font-bold text-gold-500">مميزات إنجاز الأربعة</h3></div>
+                  {[1, 2, 3, 4].map(num => (
+                    <div key={num} className="bg-charcoal-950 p-4 rounded-xl border border-charcoal-800 space-y-3">
+                      <h4 className="font-bold">الميزة {num}</h4>
+                      <input type="text" value={(siteContent as any)[`feature${num}_title`]} onChange={e => setSiteContent({...siteContent, [`feature${num}_title`]: e.target.value})} className="w-full bg-charcoal-900 border border-charcoal-800 p-2 rounded outline-none text-sm" placeholder="عنوان الميزة" />
+                      <textarea rows={2} value={(siteContent as any)[`feature${num}_desc`]} onChange={e => setSiteContent({...siteContent, [`feature${num}_desc`]: e.target.value})} className="w-full bg-charcoal-900 border border-charcoal-800 p-2 rounded outline-none text-sm resize-none" placeholder="وصف الميزة" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* TAB: CONTACT */}
+          {activeTab === 'contact' && (
+            <motion.div key="contact" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="flex justify-between items-center mb-8">
+                <h1 className="text-3xl font-bold">إدارة بيانات التواصل</h1>
+                <button 
+                  onClick={async () => {
+                    setSettingsSaving(true);
+                    const { error } = await supabase.from('settings').upsert({ id: 'contact_data', value: contactData }, { onConflict: 'id' });
+                    if (error) localStorage.setItem('contact_data', JSON.stringify(contactData));
+                    setSettingsSaving(false); alert('تم الحفظ!');
+                  }}
+                  disabled={settingsSaving}
+                  className="bg-gold-500 hover:bg-gold-400 text-charcoal-950 px-6 py-2 rounded-lg font-bold flex items-center gap-2"
+                >
+                  {settingsSaving ? <Loader2 className="animate-spin h-5 w-5" /> : 'حفظ التغييرات'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-charcoal-900 border border-charcoal-800 p-6 rounded-2xl space-y-4">
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">رقم الهاتف العام</label>
+                    <input type="text" value={contactData.phone} onChange={e => setContactData({...contactData, phone: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none font-mono text-left" dir="ltr" />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">رقم الواتساب (بالكود الدولي دون +)</label>
+                    <input type="text" value={contactData.whatsapp} onChange={e => setContactData({...contactData, whatsapp: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none font-mono text-left" dir="ltr" />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">البريد الإلكتروني</label>
+                    <input type="email" value={contactData.email} onChange={e => setContactData({...contactData, email: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none font-mono text-left" dir="ltr" />
+                  </div>
+                </div>
+
+                <div className="bg-charcoal-900 border border-charcoal-800 p-6 rounded-2xl space-y-4">
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">العنوان التفصيلي</label>
+                    <input type="text" value={contactData.address} onChange={e => setContactData({...contactData, address: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">رابط صفحة فيسبوك</label>
+                    <input type="url" value={contactData.facebook} onChange={e => setContactData({...contactData, facebook: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none font-mono text-left" dir="ltr" />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-2">مواعيد العمل (كل سطر بيوم)</label>
+                    <textarea rows={4} value={contactData.working_hours} onChange={e => setContactData({...contactData, working_hours: e.target.value})} className="w-full bg-charcoal-950 border border-charcoal-800 p-3 rounded-lg outline-none resize-none" />
+                  </div>
                 </div>
               </div>
             </motion.div>
